@@ -1,0 +1,31 @@
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local data, models, and generated outputs
+data/
+outputs/
+*.pth
+*.pt
+*.onnx
+
+# Large local media assets
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.png
+*.jpg
+*.jpeg
+
+# Local editor/system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

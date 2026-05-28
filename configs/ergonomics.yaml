@@ -1,0 +1,25 @@
+ergonomics:
+  output_dir: "./outputs/ergonomics"
+  analysis_fps: 10
+  window_seconds: 1.0
+  keyframes_per_event: 3
+  min_event_gap_seconds: 3.0
+  visibility_threshold: 0.55
+  reachability_threshold: 0.45
+  low_light_threshold: 0.28
+  blur_threshold: 0.25
+  center_offset_threshold: 0.72
+  occlusion_threshold: 0.35
+
+detector:
+  # Optional: provide a local YOLO/RT-DETR model path after fine-tuning.
+  yolo_model_path:
+  # Optional: prefer a specific detector label as the operation target.
+  target_label:
+  use_mediapipe_hands: true
+
+ollama:
+  enabled: true
+  base_url: "http://127.0.0.1:11434"
+  model: "qwen2.5vl:3b"
+  timeout_seconds: 180

@@ -1,0 +1,38 @@
+unknown_threshold: 0.38
+
+tasks:
+  - id: general_first_person_operation
+    name: 通用第一人称近手操作
+    phase: baseline_operation
+    expected_targets: ["operation_target"]
+    expected_hand_relation: "hand_near_target"
+    min_duration_sec: 1.0
+    visibility_threshold: 0.55
+    reachability_threshold: 0.45
+
+  - id: connect_harness
+    name: 线束接口插接
+    phase: assembly_connection
+    expected_targets: ["connector", "harness", "socket", "线束", "接口"]
+    expected_hand_relation: "hand_near_target"
+    min_duration_sec: 2.0
+    visibility_threshold: 0.60
+    reachability_threshold: 0.45
+
+  - id: tighten_screw
+    name: 螺丝紧固
+    phase: assembly_fastening
+    expected_targets: ["screw", "driver", "hole", "bolt", "螺丝", "螺丝刀"]
+    expected_hand_relation: "tool_near_target"
+    min_duration_sec: 2.0
+    visibility_threshold: 0.58
+    reachability_threshold: 0.45
+
+  - id: inspect_operation_point
+    name: 操作点目视确认
+    phase: inspection
+    expected_targets: ["operation_target", "connector", "socket", "label", "marker"]
+    expected_hand_relation: "target_visible"
+    min_duration_sec: 1.0
+    visibility_threshold: 0.65
+    reachability_threshold: 0.35
