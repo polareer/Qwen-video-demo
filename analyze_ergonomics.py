@@ -52,6 +52,9 @@ def build_analyzer(args: argparse.Namespace) -> ErgonomicAnalyzer:
         yolo_model_path=args.yolo_model or detector.get("yolo_model_path"),
         target_label=args.target_label or detector.get("target_label"),
         use_mediapipe_hands=bool(detector.get("use_mediapipe_hands", True)),
+        device=args.device or detector.get("device", "auto"),
+        detector_confidence=float(args.detector_conf or detector.get("confidence", 0.25)),
+        detector_imgsz=int(args.detector_imgsz or detector.get("imgsz", 640)),
     )
     task_recognizer = TaskRecognizer.from_yaml(args.task_template)
     hand_pose_timeline = load_hand_pose_timeline(args.hand_pose_csv, offset_sec=float(args.hand_pose_offset_sec))
@@ -83,6 +86,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hand-pose-csv", default=None, help="Optional hand trajectory CSV exported from the AR capture tool.")
     parser.add_argument("--hand-pose-offset-sec", type=float, default=0.0, help="Manual offset: hand pose time = video time + offset.")
     parser.add_argument("--yolo-model", default=None, help="Optional Ultralytics YOLO model path.")
+    parser.add_argument("--device", default=None, help="Detector device: auto, cpu, 0, cuda:0, etc.")
+    parser.add_argument("--detector-conf", type=float, default=None, help="YOLO detector confidence threshold.")
+    parser.add_argument("--detector-imgsz", type=int, default=None, help="YOLO detector image size.")
     parser.add_argument("--ollama-url", default=None, help="Ollama base URL.")
     parser.add_argument("--ollama-model", default=None, help="Ollama vision model name.")
     parser.add_argument("--no-ollama", action="store_true", help="Disable Qwen2.5-VL explanation and use local rule explanation.")

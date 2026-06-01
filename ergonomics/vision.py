@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,8 +36,14 @@ class FrameAnalyzer:
         yolo_model_path: str | None = None,
         target_label: str | None = None,
         use_mediapipe_hands: bool = True,
+        device: str = "auto",
+        detector_confidence: float = 0.25,
+        detector_imgsz: int = 640,
     ) -> None:
         self.target_label = target_label
+        self.device = self._resolve_device(device)
+        self.detector_confidence = detector_confidence
+        self.detector_imgsz = detector_imgsz
         self.yolo = self._load_yolo(yolo_model_path)
         self.hands_detector = self._load_mediapipe_hands(use_mediapipe_hands)
 
@@ -67,11 +75,25 @@ class FrameAnalyzer:
         if not model_path:
             return None
         try:
+            config_dir = os.path.join(tempfile.gettempdir(), "qwen_video_demo_ultralytics")
+            os.makedirs(config_dir, exist_ok=True)
+            os.environ.setdefault("YOLO_CONFIG_DIR", config_dir)
+            os.environ.setdefault("MPLCONFIGDIR", config_dir)
             from ultralytics import YOLO  # type: ignore
 
             return YOLO(model_path)
         except Exception:
             return None
+
+    def _resolve_device(self, device: str) -> str:
+        if device != "auto":
+            return device
+        try:
+            import torch
+
+            return "0" if torch.cuda.is_available() else "cpu"
+        except Exception:
+            return "cpu"
 
     def _load_mediapipe_hands(self, enabled: bool) -> Any | None:
         if not enabled:
@@ -91,7 +113,13 @@ class FrameAnalyzer:
     def _detect_with_yolo(self, frame: np.ndarray) -> list[Detection]:
         if self.yolo is None:
             return []
-        results = self.yolo.predict(frame, verbose=False)
+        results = self.yolo.predict(
+            frame,
+            verbose=False,
+            device=self.device,
+            conf=self.detector_confidence,
+            imgsz=self.detector_imgsz,
+        )
         detections: list[Detection] = []
         for result in results:
             names = getattr(result, "names", {})

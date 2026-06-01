@@ -146,6 +146,9 @@ class HandPoseTimeline:
             source_time_range=[round(samples[0].time, 3), round(samples[-1].time, 3)],
         )
 
+    def video_event_time(self, event: HandPoseEvent) -> float:
+        return event.event_time - self.offset_sec
+
     @property
     def event_count(self) -> int:
         return len(self.events)

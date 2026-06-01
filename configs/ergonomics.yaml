@@ -17,6 +17,9 @@ detector:
   # Optional: prefer a specific detector label as the operation target.
   target_label:
   use_mediapipe_hands: true
+  device: "auto"
+  confidence: 0.25
+  imgsz: 640
 
 ollama:
   enabled: true

@@ -60,6 +60,8 @@ class ErgonomicAnalyzer:
             raise FileNotFoundError(f"Unable to open video source: {source}")
 
         native_fps = capture.get(cv2.CAP_PROP_FPS) or 30.0
+        frame_count = capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0.0
+        duration_sec = frame_count / native_fps if native_fps else 0.0
         frame_step = max(1, int(round(native_fps / self.config.analysis_fps)))
         video_id = f"camera_{source}" if isinstance(source, int) else Path(source).stem
         frame_index = 0
@@ -88,10 +90,13 @@ class ErgonomicAnalyzer:
 
         capture.release()
         task_timeline = self._merge_task_timeline(task_windows)
+        hole_event_analysis = self._hole_event_analysis(str(source), video_id, native_fps, duration_sec)
+        hole_event_count = self.hand_pose_timeline.event_count if self.hand_pose_timeline is not None else 0
         report = {
             "video_id": video_id,
             "source": source,
             "task_timeline": task_timeline,
+            "hole_event_analysis": hole_event_analysis,
             "events": [event.to_dict() for event in events],
             "summary": {
                 "event_count": len(events),
@@ -99,7 +104,9 @@ class ErgonomicAnalyzer:
                 "task_coverage": self._task_coverage(task_windows),
                 "hand_pose_available": self.hand_pose_timeline is not None,
                 "hand_pose_coverage": self._hand_pose_coverage(task_windows),
-                "hole_event_count": self.hand_pose_timeline.event_count if self.hand_pose_timeline is not None else 0,
+                "hole_event_count": hole_event_count,
+                "hole_event_analyzed_count": len(hole_event_analysis),
+                "hole_event_skipped_count": max(0, hole_event_count - len(hole_event_analysis)),
                 "high_risk_event_count": sum(1 for event in events if event.risk_level == "high"),
                 "needs_human_review": any(event.qwen_explanation.needs_human_review for event in events),
             },
@@ -107,6 +114,125 @@ class ErgonomicAnalyzer:
         report_path = self.output_dir / f"{video_id}_ergonomic_report.json"
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         return {"report_path": str(report_path), **report}
+
+    def _hole_event_analysis(self, source: str, video_id: str, native_fps: float, duration_sec: float) -> list[dict[str, Any]]:
+        if self.hand_pose_timeline is None:
+            return []
+        analyses: list[dict[str, Any]] = []
+        for index, event in enumerate(self.hand_pose_timeline.events, start=1):
+            if event.event_type != "hole_completed":
+                continue
+            event_video_time = self.hand_pose_timeline.video_event_time(event)
+            start = max(0.0, event_video_time - 2.0)
+            end = min(duration_sec, event_video_time + 1.0) if duration_sec else event_video_time + 1.0
+            if end <= 0 or end <= start:
+                continue
+            hand_pose_metrics = self.hand_pose_timeline.window_metrics(start, end)
+            frame_analyses = self._sample_frame_analyses(source, native_fps, start, end)
+            visibility_score = round(mean(item.visibility_score for item in frame_analyses), 3) if frame_analyses else None
+            reachability_score = round(mean(item.reachability_score for item in frame_analyses), 3) if frame_analyses else None
+            brightness = round(mean(item.brightness for item in frame_analyses), 3) if frame_analyses else None
+            sharpness = round(mean(item.sharpness for item in frame_analyses), 3) if frame_analyses else None
+            risk_reasons = self._hole_risk_reasons(visibility_score, reachability_score, sharpness, hand_pose_metrics)
+            risk_level = self._hole_risk_level(risk_reasons, hand_pose_metrics)
+            keyframes = self._save_hole_keyframes(source, video_id, index, native_fps, [start, event_video_time, end])
+            analyses.append(
+                {
+                    "event_type": event.event_type,
+                    "hole_id": event.hole_id,
+                    "event_time": round(event.event_time, 3),
+                    "video_time": round(event_video_time, 3),
+                    "window": [self._format_time(start), self._format_time(end)],
+                    "visibility_score": visibility_score,
+                    "reachability_score": reachability_score,
+                    "brightness": brightness,
+                    "sharpness": sharpness,
+                    "hand_stability_score": hand_pose_metrics.stability_score,
+                    "reach_distance_mm": hand_pose_metrics.reach_distance_mm,
+                    "hand_speed_mm_s": hand_pose_metrics.hand_speed_mm_s,
+                    "risk_level": risk_level,
+                    "risk_reasons": risk_reasons,
+                    "hand_pose_metrics": asdict(hand_pose_metrics),
+                    "evidence_keyframes": keyframes,
+                }
+            )
+        return analyses
+
+    def _sample_frame_analyses(self, source: str, native_fps: float, start_sec: float, end_sec: float) -> list[FrameAnalysis]:
+        capture = cv2.VideoCapture(source)
+        if not capture.isOpened():
+            return []
+        sample_times = [start_sec, (start_sec + end_sec) / 2, end_sec]
+        analyses: list[FrameAnalysis] = []
+        for sample_time in sample_times:
+            frame_index = max(0, int(round(sample_time * native_fps)))
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            ok, frame = capture.read()
+            if ok:
+                analyses.append(self.frame_analyzer.analyze(frame, frame_index, sample_time))
+        capture.release()
+        return analyses
+
+    def _save_hole_keyframes(
+        self,
+        source: str,
+        video_id: str,
+        event_index: int,
+        native_fps: float,
+        sample_times: list[float],
+    ) -> list[str]:
+        capture = cv2.VideoCapture(source)
+        if not capture.isOpened():
+            return []
+        paths: list[str] = []
+        for sample_index, sample_time in enumerate(sample_times):
+            frame_index = max(0, int(round(sample_time * native_fps)))
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+            ok, frame = capture.read()
+            if not ok:
+                continue
+            filename = f"{video_id}_hole_{event_index:05d}_{sample_index}_frame_{frame_index}.jpg"
+            path = self.keyframe_dir / filename
+            cv2.imwrite(str(path), frame)
+            paths.append(str(path))
+        capture.release()
+        return paths
+
+    def _hole_risk_reasons(
+        self,
+        visibility_score: float | None,
+        reachability_score: float | None,
+        sharpness: float | None,
+        hand_pose_metrics: HandPoseMetrics,
+    ) -> list[str]:
+        reasons: list[str] = []
+        if visibility_score is not None and visibility_score < self.config.visibility_threshold:
+            reasons.append("孔完成窗口内视频可视性偏低")
+        if reachability_score is not None and reachability_score < self.config.reachability_threshold:
+            reasons.append("孔完成窗口内视频可达性估计偏低")
+        if sharpness is not None and sharpness < self.config.blur_threshold:
+            reasons.append("孔完成窗口内画面清晰度偏低")
+        if not hand_pose_metrics.hand_pose_matched:
+            reasons.append("孔完成窗口内缺少手部轨迹证据")
+        if hand_pose_metrics.stability_score is not None and hand_pose_metrics.stability_score < 0.45:
+            reasons.append("孔完成窗口内手部轨迹稳定性偏低")
+        if hand_pose_metrics.reach_distance_mm is not None and hand_pose_metrics.reach_distance_mm >= 650:
+            reasons.append("孔完成窗口内手部相对头显距离偏大")
+        if hand_pose_metrics.hand_speed_mm_s is not None and hand_pose_metrics.hand_speed_mm_s >= 120:
+            reasons.append("孔完成窗口内手部速度偏高，可能存在匆忙操作或抖动")
+        if not reasons:
+            reasons.append("孔完成窗口内未发现明显人因工效风险")
+        return reasons
+
+    def _hole_risk_level(self, reasons: list[str], hand_pose_metrics: HandPoseMetrics) -> str:
+        if reasons == ["孔完成窗口内未发现明显人因工效风险"]:
+            return "low"
+        if not hand_pose_metrics.hand_pose_matched:
+            return "medium"
+        high_keywords = ("稳定性偏低", "距离偏大", "速度偏高")
+        if any(any(keyword in reason for keyword in high_keywords) for reason in reasons):
+            return "high"
+        return "medium"
 
     def _process_window(
         self,

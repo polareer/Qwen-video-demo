@@ -1,0 +1,9 @@
+path: ../datasets/assembly_yolo
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: tool
+  1: workpiece
+  2: hand
