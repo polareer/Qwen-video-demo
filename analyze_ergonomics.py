@@ -23,6 +23,7 @@ def build_analyzer(args: argparse.Namespace) -> ErgonomicAnalyzer:
     try:
         from ergonomics import ErgonomicAnalyzer, OllamaVisionClient
         from ergonomics.analyzer import AnalyzerConfig
+        from ergonomics.hand_pose import load_hand_pose_timeline
         from ergonomics.tasks import TaskRecognizer
         from ergonomics.vision import FrameAnalyzer
     except ModuleNotFoundError as exc:
@@ -53,6 +54,7 @@ def build_analyzer(args: argparse.Namespace) -> ErgonomicAnalyzer:
         use_mediapipe_hands=bool(detector.get("use_mediapipe_hands", True)),
     )
     task_recognizer = TaskRecognizer.from_yaml(args.task_template)
+    hand_pose_timeline = load_hand_pose_timeline(args.hand_pose_csv, offset_sec=float(args.hand_pose_offset_sec))
     ollama_client = None
     if analyzer_config.use_ollama:
         ollama_client = OllamaVisionClient(
@@ -65,6 +67,7 @@ def build_analyzer(args: argparse.Namespace) -> ErgonomicAnalyzer:
         config=analyzer_config,
         frame_analyzer=frame_analyzer,
         task_recognizer=task_recognizer,
+        hand_pose_timeline=hand_pose_timeline,
         ollama_client=ollama_client,
     )
 
@@ -77,6 +80,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--analysis-fps", type=float, default=None, help="Frame analysis rate.")
     parser.add_argument("--target-label", default=None, help="Preferred target label from detector output.")
     parser.add_argument("--task-template", default="configs/task_templates.yaml", help="YAML SOP task template path.")
+    parser.add_argument("--hand-pose-csv", default=None, help="Optional hand trajectory CSV exported from the AR capture tool.")
+    parser.add_argument("--hand-pose-offset-sec", type=float, default=0.0, help="Manual offset: hand pose time = video time + offset.")
     parser.add_argument("--yolo-model", default=None, help="Optional Ultralytics YOLO model path.")
     parser.add_argument("--ollama-url", default=None, help="Ollama base URL.")
     parser.add_argument("--ollama-model", default=None, help="Ollama vision model name.")

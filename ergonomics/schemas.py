@@ -42,6 +42,22 @@ class ErgonomicMetrics:
 
 
 @dataclass
+class HandPoseMetrics:
+    hand_pose_matched: bool = False
+    center_relative_mm: list[float] | None = None
+    palm_relative_mm: list[float] | None = None
+    hand_speed_mm_s: float | None = None
+    stability_score: float | None = None
+    reach_distance_mm: float | None = None
+    posture_spread_mm: float | None = None
+    nearest_event_type: str | None = None
+    nearest_event_time: float | None = None
+    time_to_nearest_event_sec: float | None = None
+    sample_count: int = 0
+    source_time_range: list[float] | None = None
+
+
+@dataclass
 class Evidence:
     keyframes: list[str] = field(default_factory=list)
     clip: str | None = None
@@ -72,6 +88,7 @@ class ErgonomicRiskEvent:
     target: TargetState
     metrics: ErgonomicMetrics
     evidence: Evidence
+    hand_pose_metrics: HandPoseMetrics = field(default_factory=HandPoseMetrics)
     qwen_explanation: QwenExplanation = field(default_factory=QwenExplanation)
 
     def to_dict(self) -> dict[str, Any]:

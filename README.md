@@ -48,6 +48,33 @@ Use a custom SOP task template:
 python analyze_ergonomics.py --source path/to/video.mp4 --task-template configs/task_templates.yaml
 ```
 
+Fuse first-person video with an exported hand trajectory CSV:
+
+```bash
+python analyze_ergonomics.py \
+  --source path/to/video.mp4 \
+  --hand-pose-csv path/to/HandTrajectory_Right.csv \
+  --hand-pose-offset-sec 0 \
+  --no-ollama
+```
+
+`--hand-pose-offset-sec` manually aligns the two timelines:
+
+```text
+hand_pose_time = video_time + hand_pose_offset_sec
+```
+
+The supported hand trajectory format is the AR export used by this project:
+
+```text
+#META ...
+time,head_world_pos_x,...,center_x,center_y,center_z,Palm_x,...,ThumbTip_z
+...
+#EVENTS
+event_type,hole_id,event_time
+hole_completed,Ringline,5.9008
+```
+
 Use a detector and preferred target label:
 
 ```bash
@@ -60,6 +87,7 @@ The report is written to `outputs/ergonomics/*_ergonomic_report.json` by default
 
 - `task_timeline`: recognized task phases, time ranges, confidence, and matched targets.
 - `events`: risk events with task info, risk type, metrics, keyframes, and Qwen explanation.
+- `events[].hand_pose_metrics`: optional fused hand trajectory metrics, including matched state, relative hand position, speed, stability, reach distance, posture spread, and nearest hole-completion event.
 - `summary`: event count, risk types, task coverage, high-risk count, and review flag.
 
 Evidence frames are saved under `outputs/ergonomics/keyframes/`.
